@@ -58,24 +58,29 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, nextTick } from 'vue'
-import { categoriesApi } from '../api/index.js'
+import { categoriesApi } from '../api/index.ts'
+import type { Category, Task } from '../types'
+import type { AxiosError } from 'axios'
 
-const props  = defineProps({ categories: Array, tasks: Array })
-const emit   = defineEmits(['refresh', 'toast'])
+const props = defineProps<{ categories: Category[]; tasks: Task[] }>()
+const emit  = defineEmits<{
+  refresh: []
+  toast:   [message: string, type: 'success' | 'error']
+}>()
 
 const showForm   = ref(false)
 const newName    = ref('')
 const submitting = ref(false)
-const nameInput  = ref(null)
+const nameInput  = ref<HTMLInputElement | null>(null)
 
 const PALETTE = [
   '#6366f1','#8b5cf6','#ec4899','#f59e0b',
   '#10b981','#06b6d4','#f97316','#84cc16',
 ]
-const catColor    = (id) => PALETTE[(id - 1) % PALETTE.length]
-const taskCountFor = (catId) => props.tasks.filter(t => t.category?.id === catId).length
+const catColor     = (id: number) => PALETTE[(id - 1) % PALETTE.length]
+const taskCountFor = (catId: number) => props.tasks.filter(t => t.category?.id === catId).length
 
 async function toggleForm() {
   showForm.value = !showForm.value
@@ -95,14 +100,14 @@ async function addCategory() {
     emit('refresh')
     emit('toast', 'Category added successfully', 'success')
   } catch (err) {
-    const msg = err.response?.data?.message ?? 'Failed to add category'
+    const msg = (err as AxiosError<{ message?: string }>).response?.data?.message ?? 'Failed to add category'
     emit('toast', msg, 'error')
   } finally {
     submitting.value = false
   }
 }
 
-async function deleteCategory(id, name) {
+async function deleteCategory(id: number, name: string) {
   if (!confirm(`Delete "${name}"?\n\nAll tasks in this category will also be deleted.`)) return
   try {
     await categoriesApi.remove(id)

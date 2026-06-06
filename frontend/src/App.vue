@@ -61,17 +61,18 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { categoriesApi, tasksApi } from './api/index.js'
+import { categoriesApi, tasksApi } from './api/index.ts'
 import CategorySection from './components/CategorySection.vue'
 import TaskSection from './components/TaskSection.vue'
+import type { Category, Task, Toast } from './types'
 
-const categories = ref([])
-const tasks      = ref([])
+const categories = ref<Category[]>([])
+const tasks      = ref<Task[]>([])
 const loading    = ref(true)
-const toast      = ref(null)
-let   toastTimer = null
+const toast      = ref<Toast | null>(null)
+let   toastTimer: ReturnType<typeof setTimeout> | null = null
 
 const pending = computed(() => tasks.value.filter(t => !t.completed).length)
 const done    = computed(() => tasks.value.filter(t =>  t.completed).length)
@@ -90,8 +91,8 @@ async function refreshAll() {
   await Promise.all([fetchCategories(), fetchTasks()])
 }
 
-function showToast(message, type = 'success') {
-  clearTimeout(toastTimer)
+function showToast(message: string, type: Toast['type'] = 'success') {
+  if (toastTimer) clearTimeout(toastTimer)
   toast.value = { message, type }
   toastTimer = setTimeout(() => (toast.value = null), 3500)
 }
@@ -112,9 +113,9 @@ onMounted(async () => {
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --primary:        #6366f1;
-  --primary-dim:    #4f46e5;
-  --primary-bg:     #eef2ff;
+  --primary:        #e8552a;
+  --primary-dim:    #c94420;
+  --primary-bg:     #fff3ee;
   --success:        #10b981;
   --success-bg:     #ecfdf5;
   --danger:         #ef4444;
@@ -126,7 +127,7 @@ onMounted(async () => {
   --bg:             #f1f5f9;
   --surface:        #ffffff;
   --border:         #e2e8f0;
-  --border-focus:   #6366f1;
+  --border-focus:   #e8552a;
 
   --text:           #0f172a;
   --text-soft:      #475569;
@@ -163,7 +164,7 @@ body {
 
 /* ── Header ── */
 .app-header {
-  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+  background: linear-gradient(135deg, #431407 0%, #c2390f 100%);
   color: #fff;
   padding: 0 1.5rem;
   position: sticky;
@@ -187,7 +188,7 @@ body {
   border-radius: var(--r-sm);
   display: grid; place-items: center;
   font-size: 1.2rem; font-weight: 700;
-  box-shadow: 0 0 0 3px rgba(99,102,241,.35);
+  box-shadow: 0 0 0 3px rgba(232,85,42,.35);
 }
 .brand-title { font-size: 1.2rem; font-weight: 700; letter-spacing: -.3px; }
 .brand-sub   { font-size: .75rem; color: rgba(255,255,255,.55); margin-top: 1px; }
@@ -274,7 +275,7 @@ body {
 }
 .input:focus {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+  box-shadow: 0 0 0 3px rgba(232,85,42,.12);
 }
 
 .btn {
@@ -287,7 +288,7 @@ body {
 }
 .btn:active { transform: scale(.97); }
 .btn--primary  { background: var(--primary); color: #fff; }
-.btn--primary:hover  { background: var(--primary-dim); box-shadow: 0 2px 8px rgba(99,102,241,.35); }
+.btn--primary:hover  { background: var(--primary-dim); box-shadow: 0 2px 8px rgba(232,85,42,.35); }
 .btn--danger   { background: var(--danger-bg); color: var(--danger); }
 .btn--danger:hover   { background: var(--danger); color: #fff; }
 .btn--ghost    { background: transparent; color: var(--text-soft); border: 1.5px solid var(--border); }

@@ -173,26 +173,33 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
-import { tasksApi } from '../api/index.js'
+import { tasksApi } from '../api/index.ts'
+import type { Category, Task, TaskPayload } from '../types'
+import type { AxiosError } from 'axios'
 
-const props = defineProps({ categories: Array, tasks: Array })
-const emit  = defineEmits(['refresh-tasks', 'refresh', 'toast'])
+const props = defineProps<{ categories: Category[]; tasks: Task[] }>()
+const emit  = defineEmits<{
+  'refresh-tasks': []
+  refresh:         []
+  toast:           [message: string, type: 'success' | 'error']
+}>()
 
 /* ── Filter ── */
-const filter = ref('all')
+type FilterKey = 'all' | 'active' | 'completed'
+const filter = ref<FilterKey>('all')
 const FILTERS = computed(() => [
-  { key: 'all',       label: 'All',       count: props.tasks.length },
-  { key: 'active',    label: 'Active',    count: props.tasks.filter(t => !t.completed).length },
-  { key: 'completed', label: 'Completed', count: props.tasks.filter(t =>  t.completed).length },
+  { key: 'all'       as FilterKey, label: 'All',       count: props.tasks.length },
+  { key: 'active'    as FilterKey, label: 'Active',    count: props.tasks.filter(t => !t.completed).length },
+  { key: 'completed' as FilterKey, label: 'Completed', count: props.tasks.filter(t =>  t.completed).length },
 ])
 const filteredTasks = computed(() => {
   if (filter.value === 'active')    return props.tasks.filter(t => !t.completed)
   if (filter.value === 'completed') return props.tasks.filter(t =>  t.completed)
   return props.tasks
 })
-const emptyMessage = computed(() => ({
+const emptyMessage = computed<string>(() => ({
   all:       'No tasks yet. Add your first one above!',
   active:    'No pending tasks — great job!',
   completed: 'Nothing completed yet. Get started!',
@@ -201,14 +208,14 @@ const emptyMessage = computed(() => ({
 /* ── Category colors ── */
 const PALETTE    = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#06b6d4','#f97316','#84cc16']
 const PALETTE_BG = ['#eef2ff','#f5f3ff','#fdf2f8','#fffbeb','#ecfdf5','#ecfeff','#fff7ed','#f7fee7']
-const catColor   = (id) => PALETTE[(id - 1) % PALETTE.length]
-const catColorBg = (id) => PALETTE_BG[(id - 1) % PALETTE_BG.length]
+const catColor   = (id: number) => PALETTE[(id - 1) % PALETTE.length]
+const catColorBg = (id: number) => PALETTE_BG[(id - 1) % PALETTE_BG.length]
 
 /* ── Add task ── */
-const showAddForm  = ref(false)
-const addingTask   = ref(false)
-const addTitleInput = ref(null)
-const newTask = ref({ title: '', description: '', categoryId: null, completed: false })
+const showAddForm   = ref(false)
+const addingTask    = ref(false)
+const addTitleInput = ref<HTMLInputElement | null>(null)
+const newTask = ref<TaskPayload>({ title: '', description: '', categoryId: null, completed: false })
 
 async function toggleAddForm() {
   showAddForm.value = !showAddForm.value
@@ -228,19 +235,20 @@ async function createTask() {
       categoryId:  newTask.value.categoryId,
       completed:   newTask.value.completed,
     })
-    newTask.value  = { title: '', description: '', categoryId: null, completed: false }
+    newTask.value     = { title: '', description: '', categoryId: null, completed: false }
     showAddForm.value = false
     emit('refresh-tasks')
     emit('toast', 'Task created', 'success')
   } catch (err) {
-    emit('toast', err.response?.data?.errors?.[0] ?? 'Failed to create task', 'error')
+    const msg = (err as AxiosError<{ errors?: string[] }>).response?.data?.errors?.[0] ?? 'Failed to create task'
+    emit('toast', msg, 'error')
   } finally {
     addingTask.value = false
   }
 }
 
 /* ── Toggle complete ── */
-async function toggleComplete(task) {
+async function toggleComplete(task: Task) {
   try {
     await tasksApi.update(task.id, {
       title:       task.title,
@@ -255,11 +263,11 @@ async function toggleComplete(task) {
 }
 
 /* ── Inline edit ── */
-const editingId  = ref(null)
+const editingId  = ref<number | null>(null)
 const savingEdit = ref(false)
-const editForm   = ref({ title: '', description: '', categoryId: null, completed: false })
+const editForm   = ref<TaskPayload>({ title: '', description: '', categoryId: null, completed: false })
 
-function startEdit(task) {
+function startEdit(task: Task) {
   editingId.value = task.id
   editForm.value  = {
     title:       task.title,
@@ -273,7 +281,7 @@ function cancelEdit() {
   editingId.value = null
 }
 
-async function saveEdit(taskId) {
+async function saveEdit(taskId: number) {
   if (!editForm.value.title.trim()) return
   savingEdit.value = true
   try {
@@ -294,7 +302,7 @@ async function saveEdit(taskId) {
 }
 
 /* ── Delete ── */
-async function deleteTask(id, title) {
+async function deleteTask(id: number, title: string) {
   if (!confirm(`Delete task "${title}"?`)) return
   try {
     await tasksApi.remove(id)
@@ -348,7 +356,7 @@ async function deleteTask(id, title) {
 .filter-btn.active {
   background: var(--primary-bg);
   color: var(--primary);
-  border-color: rgba(99,102,241,.25);
+  border-color: rgba(232,85,42,.25);
   font-weight: 600;
 }
 .filter-count {
@@ -376,7 +384,7 @@ async function deleteTask(id, title) {
 }
 .task-item:last-child { border-bottom: none; }
 .task-item:hover { background: #fafbfc; }
-.task-item--editing { background: #f8f9ff; }
+.task-item--editing { background: #fff5f0; }
 
 .task-row {
   display: flex;
@@ -455,7 +463,7 @@ async function deleteTask(id, title) {
 .task-item:hover .task-actions .btn--icon { opacity: 1; }
 
 /* ── Edit panel ── */
-.edit-panel { padding: .875rem 1.25rem; background: #f8f9ff; }
+.edit-panel { padding: .875rem 1.25rem; background: #fff5f0; }
 .edit-panel-head {
   font-size: .7rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: .06em; color: var(--primary);
