@@ -14,9 +14,7 @@ Built with Spring Boot (backend) and Vue 3 (frontend).
 - H2 In-Memory Database
 
 **Frontend**
-- Vue 3 (Composition API)
-- Vite
-- Axios
+- Vue 3 
 
 ## Features
 
