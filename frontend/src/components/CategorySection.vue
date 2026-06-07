@@ -39,11 +39,12 @@
 
     <!-- list of all categories - each one shows name, task count, and a delete button -->
     <ul class="cat-list" role="list">
+      <!-- each li gets a CSS variable set to the category's color so the dot can use it -->
       <li
         v-for="cat in categories"
         :key="cat.id"
         class="cat-item"
-        :style="{ '--cat-color': catColor(cat.id) }"  <!-- pass the color as a CSS variable so the dot can use it -->
+        :style="{ '--cat-color': catColor(cat.id) }"
       >
         <span class="cat-dot"></span>
         <span class="cat-name">{{ cat.name }}</span>
