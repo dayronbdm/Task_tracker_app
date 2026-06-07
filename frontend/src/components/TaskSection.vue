@@ -1,18 +1,19 @@
 <template>
   <div class="section-card">
-    <!-- Head -->
+    <!-- section header with a badge showing how many tasks match the current filter -->
     <div class="section-head">
       <h2 class="section-title">
         <span class="section-icon">📋</span>
         Tasks
         <span class="section-badge">{{ filteredTasks.length }}</span>
       </h2>
+      <!-- toggles the new-task form open/closed -->
       <button class="btn btn--primary" @click="toggleAddForm">
         {{ showAddForm ? '✕ Cancel' : '+ New Task' }}
       </button>
     </div>
 
-    <!-- Add-task form -->
+    <!-- add-task form that slides in/out -->
     <Transition name="slide">
       <div v-if="showAddForm" class="task-form-wrap">
         <form @submit.prevent="createTask" class="task-form">
@@ -59,7 +60,7 @@
       </div>
     </Transition>
 
-    <!-- Filter tabs -->
+    <!-- filter tabs: All / Active / Completed -->
     <div class="filter-bar">
       <button
         v-for="f in FILTERS"
@@ -72,17 +73,18 @@
       </button>
     </div>
 
-    <!-- Task list -->
+    <!-- the scrollable list of tasks -->
     <ul class="task-list" role="list">
+      <!-- TransitionGroup animates tasks when they are added or removed -->
       <TransitionGroup name="task-item">
         <li
           v-for="task in filteredTasks"
           :key="task.id"
           :class="['task-item', { 'task-item--done': task.completed, 'task-item--editing': editingId === task.id }]"
         >
-          <!-- ── View row ── -->
+          <!-- normal view row (shown when the task is not being edited) -->
           <div v-if="editingId !== task.id" class="task-row">
-            <!-- Checkbox -->
+            <!-- circular checkbox button - clicking it toggles the completed state -->
             <button
               :class="['check-circle', { 'check-circle--done': task.completed }]"
               :title="task.completed ? 'Mark incomplete' : 'Mark complete'"
@@ -92,15 +94,16 @@
               <span v-if="task.completed">✓</span>
             </button>
 
-            <!-- Info -->
+            <!-- title and description text -->
             <div class="task-info">
               <span :class="['task-title', { 'task-title--done': task.completed }]">
                 {{ task.title }}
               </span>
+              <!-- only show description if the task has one -->
               <span v-if="task.description" class="task-desc">{{ task.description }}</span>
             </div>
 
-            <!-- Category badge -->
+            <!-- colored pill showing which category the task belongs to -->
             <span
               v-if="task.category"
               class="cat-badge"
@@ -111,7 +114,7 @@
             >{{ task.category.name }}</span>
             <span v-else class="cat-badge cat-badge--none">No category</span>
 
-            <!-- Actions -->
+            <!-- edit and delete buttons, hidden until you hover the row -->
             <div class="task-actions">
               <button class="btn btn--ghost btn--sm" title="Edit task" @click="startEdit(task)">
                 ✎ Edit
@@ -122,7 +125,7 @@
             </div>
           </div>
 
-          <!-- ── Edit panel ── -->
+          <!-- inline edit panel - replaces the row when editing -->
           <div v-else class="edit-panel">
             <div class="edit-panel-head">Editing task</div>
             <form @submit.prevent="saveEdit(task.id)" class="edit-form">
@@ -165,6 +168,7 @@
         </li>
       </TransitionGroup>
 
+      <!-- empty state message when no tasks match the current filter -->
       <li v-if="filteredTasks.length === 0" class="task-empty">
         <span class="empty-icon">{{ filter === 'completed' ? '🎉' : '📭' }}</span>
         <p>{{ emptyMessage }}</p>
@@ -179,54 +183,66 @@ import { tasksApi } from '../api/index.ts'
 import type { Category, Task, TaskPayload } from '../types'
 import type { AxiosError } from 'axios'
 
+// parent passes in the full list of categories (for the dropdown) and all tasks
 const props = defineProps<{ categories: Category[]; tasks: Task[] }>()
+
+// we emit three different events back to the parent
+// 'refresh-tasks' only re-fetches tasks (faster), 'refresh' re-fetches everything
 const emit  = defineEmits<{
   'refresh-tasks': []
   refresh:         []
   toast:           [message: string, type: 'success' | 'error']
 }>()
 
-/* ── Filter ── */
+// the three possible filter states for the tab buttons
 type FilterKey = 'all' | 'active' | 'completed'
-const filter = ref<FilterKey>('all')
+const filter = ref<FilterKey>('all')  // start with "All" selected
+
+// computed so it updates the counts live as tasks change
 const FILTERS = computed(() => [
   { key: 'all'       as FilterKey, label: 'All',       count: props.tasks.length },
   { key: 'active'    as FilterKey, label: 'Active',    count: props.tasks.filter(t => !t.completed).length },
   { key: 'completed' as FilterKey, label: 'Completed', count: props.tasks.filter(t =>  t.completed).length },
 ])
+
+// returns only the tasks that match the active filter tab
 const filteredTasks = computed(() => {
   if (filter.value === 'active')    return props.tasks.filter(t => !t.completed)
   if (filter.value === 'completed') return props.tasks.filter(t =>  t.completed)
-  return props.tasks
+  return props.tasks  // 'all' - no filtering needed
 })
+
+// different empty-state message depending on which tab is active
 const emptyMessage = computed<string>(() => ({
   all:       'No tasks yet. Add your first one above!',
   active:    'No pending tasks — great job!',
   completed: 'Nothing completed yet. Get started!',
 }[filter.value]))
 
-/* ── Category colors ── */
+// two palettes so each category gets a matching text color and background color
 const PALETTE    = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#06b6d4','#f97316','#84cc16']
 const PALETTE_BG = ['#eef2ff','#f5f3ff','#fdf2f8','#fffbeb','#ecfdf5','#ecfeff','#fff7ed','#f7fee7']
 const catColor   = (id: number) => PALETTE[(id - 1) % PALETTE.length]
 const catColorBg = (id: number) => PALETTE_BG[(id - 1) % PALETTE_BG.length]
 
-/* ── Add task ── */
+// state for the new task form
 const showAddForm   = ref(false)
 const addingTask    = ref(false)
-const addTitleInput = ref<HTMLInputElement | null>(null)
+const addTitleInput = ref<HTMLInputElement | null>(null)  // ref to focus the input when the form opens
 const newTask = ref<TaskPayload>({ title: '', description: '', categoryId: null, completed: false })
 
+// show/hide the form and auto-focus the title input when it opens
 async function toggleAddForm() {
   showAddForm.value = !showAddForm.value
   if (showAddForm.value) {
-    await nextTick()
+    await nextTick()  // wait for Vue to render the input first
     addTitleInput.value?.focus()
   }
 }
 
+// sends a POST request to create a new task, then resets the form
 async function createTask() {
-  if (!newTask.value.title.trim()) return
+  if (!newTask.value.title.trim()) return  // don't submit blank titles
   addingTask.value = true
   try {
     await tasksApi.create({
@@ -235,11 +251,13 @@ async function createTask() {
       categoryId:  newTask.value.categoryId,
       completed:   newTask.value.completed,
     })
+    // reset form fields after successful creation
     newTask.value     = { title: '', description: '', categoryId: null, completed: false }
     showAddForm.value = false
     emit('refresh-tasks')
     emit('toast', 'Task created', 'success')
   } catch (err) {
+    // grab the first validation error from the API or fall back to a generic message
     const msg = (err as AxiosError<{ errors?: string[] }>).response?.data?.errors?.[0] ?? 'Failed to create task'
     emit('toast', msg, 'error')
   } finally {
@@ -247,14 +265,14 @@ async function createTask() {
   }
 }
 
-/* ── Toggle complete ── */
+// flips the completed flag by sending a PUT with the opposite value
 async function toggleComplete(task: Task) {
   try {
     await tasksApi.update(task.id, {
       title:       task.title,
       description: task.description,
       categoryId:  task.category?.id ?? null,
-      completed:   !task.completed,
+      completed:   !task.completed,  // flip it
     })
     emit('refresh-tasks')
   } catch {
@@ -262,25 +280,28 @@ async function toggleComplete(task: Task) {
   }
 }
 
-/* ── Inline edit ── */
-const editingId  = ref<number | null>(null)
+// inline editing state - stores which task is being edited and its current form values
+const editingId  = ref<number | null>(null)  // null means nothing is being edited
 const savingEdit = ref(false)
 const editForm   = ref<TaskPayload>({ title: '', description: '', categoryId: null, completed: false })
 
+// populate the edit form with the current task data and mark it as being edited
 function startEdit(task: Task) {
   editingId.value = task.id
   editForm.value  = {
     title:       task.title,
-    description: task.description ?? '',
+    description: task.description ?? '',  // description might be null in the DB
     categoryId:  task.category?.id ?? null,
     completed:   task.completed,
   }
 }
 
+// close the edit panel without saving
 function cancelEdit() {
   editingId.value = null
 }
 
+// save the edited task by sending a PUT request
 async function saveEdit(taskId: number) {
   if (!editForm.value.title.trim()) return
   savingEdit.value = true
@@ -291,7 +312,7 @@ async function saveEdit(taskId: number) {
       categoryId:  editForm.value.categoryId,
       completed:   editForm.value.completed,
     })
-    editingId.value = null
+    editingId.value = null  // close the edit panel
     emit('refresh-tasks')
     emit('toast', 'Task updated', 'success')
   } catch {
@@ -301,11 +322,12 @@ async function saveEdit(taskId: number) {
   }
 }
 
-/* ── Delete ── */
+// delete a task after a confirmation dialog
 async function deleteTask(id: number, title: string) {
   if (!confirm(`Delete task "${title}"?`)) return
   try {
     await tasksApi.remove(id)
+    // if the task being deleted is currently open in the edit panel, close it
     if (editingId.value === id) editingId.value = null
     emit('refresh-tasks')
     emit('toast', 'Task deleted', 'success')
@@ -316,7 +338,7 @@ async function deleteTask(id: number, title: string) {
 </script>
 
 <style scoped>
-/* ── Add-task form ── */
+/* the add-task form container with a light orange background */
 .task-form-wrap {
   padding: 1rem 1.25rem;
   background: var(--primary-bg);
@@ -324,17 +346,19 @@ async function deleteTask(id: number, title: string) {
 }
 .task-form { display: flex; flex-direction: column; }
 .form-row  { display: flex; gap: .75rem; flex-wrap: wrap; }
+/* each form field column: label on top, input below */
 .form-group { display: flex; flex-direction: column; gap: .3rem; flex: 1; min-width: 140px; }
 .form-label { font-size: .75rem; font-weight: 600; color: var(--text-soft); text-transform: uppercase; letter-spacing: .04em; }
 .form-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
 .check-label { display: flex; align-items: center; gap: .4rem; font-size: .875rem; color: var(--text-soft); cursor: pointer; user-select: none; }
 .check-box   { width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; }
 
+/* slide animation - uses max-height trick to animate height from 0 to the content size */
 .slide-enter-active, .slide-leave-active { transition: all .22s ease; overflow: hidden; }
 .slide-enter-from, .slide-leave-to { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
 .slide-enter-to, .slide-leave-from { max-height: 320px; }
 
-/* ── Filter bar ── */
+/* the row of All / Active / Completed filter tab buttons */
 .filter-bar {
   display: flex;
   gap: .25rem;
@@ -370,22 +394,23 @@ async function deleteTask(id: number, title: string) {
 }
 .filter-btn.active .filter-count { opacity: 1; }
 
-/* ── Task list ── */
+/* scrollable task list with a max height so it doesn't push everything off screen */
 .task-list {
   list-style: none;
   max-height: 560px;
   overflow-y: auto;
 }
 
-/* ── Task item ── */
+/* individual task row */
 .task-item {
   border-bottom: 1px solid var(--border);
   transition: background var(--transition);
 }
 .task-item:last-child { border-bottom: none; }
 .task-item:hover { background: #fafbfc; }
-.task-item--editing { background: #fff5f0; }
+.task-item--editing { background: #fff5f0; }  /* light orange tint when the edit form is open */
 
+/* the horizontal flex row that holds checkbox, title, badge, and action buttons */
 .task-row {
   display: flex;
   align-items: center;
@@ -393,7 +418,7 @@ async function deleteTask(id: number, title: string) {
   padding: .8rem 1.25rem;
 }
 
-/* ── Check circle ── */
+/* circular toggle button for marking tasks complete/incomplete */
 .check-circle {
   flex-shrink: 0;
   width: 22px; height: 22px;
@@ -403,14 +428,16 @@ async function deleteTask(id: number, title: string) {
   cursor: pointer;
   display: grid; place-items: center;
   font-size: .7rem; font-weight: 700;
-  color: transparent;
+  color: transparent;  /* hide the checkmark until the task is done */
   transition: all var(--transition);
 }
+/* hover: show a green preview of the checkmark */
 .check-circle:hover           { border-color: var(--success); color: var(--success); background: var(--success-bg); }
+/* done state: filled green circle with white checkmark */
 .check-circle--done           { border-color: var(--success); background: var(--success); color: #fff; }
+/* hover on a done task: turns red to hint you can un-complete it */
 .check-circle--done:hover     { background: var(--danger); border-color: var(--danger); color: #fff; }
 
-/* ── Task info ── */
 .task-info {
   flex: 1;
   min-width: 0;
@@ -427,6 +454,7 @@ async function deleteTask(id: number, title: string) {
   text-overflow: ellipsis;
   transition: color var(--transition);
 }
+/* strike through the title and grey it out when the task is completed */
 .task-title--done {
   color: var(--text-muted);
   text-decoration: line-through;
@@ -439,7 +467,6 @@ async function deleteTask(id: number, title: string) {
   text-overflow: ellipsis;
 }
 
-/* ── Category badge ── */
 .cat-badge {
   flex-shrink: 0;
   font-size: .72rem; font-weight: 600;
@@ -454,7 +481,7 @@ async function deleteTask(id: number, title: string) {
   background: var(--bg);
 }
 
-/* ── Task actions ── */
+/* action buttons are hidden by default and only appear on hover - keeps the list clean */
 .task-actions { display: flex; align-items: center; gap: .25rem; flex-shrink: 0; }
 .btn--sm { padding: .3rem .6rem; font-size: .77rem; }
 .task-item .task-actions .btn--ghost,
@@ -462,7 +489,6 @@ async function deleteTask(id: number, title: string) {
 .task-item:hover .task-actions .btn--ghost,
 .task-item:hover .task-actions .btn--icon { opacity: 1; }
 
-/* ── Edit panel ── */
 .edit-panel { padding: .875rem 1.25rem; background: #fff5f0; }
 .edit-panel-head {
   font-size: .7rem; font-weight: 700; text-transform: uppercase;
@@ -471,7 +497,6 @@ async function deleteTask(id: number, title: string) {
 }
 .edit-form { display: flex; flex-direction: column; }
 
-/* ── Empty state ── */
 .task-empty {
   display: flex; flex-direction: column; align-items: center;
   gap: .625rem; padding: 3rem 1.25rem;
@@ -480,7 +505,7 @@ async function deleteTask(id: number, title: string) {
 }
 .empty-icon { font-size: 2.5rem; }
 
-/* ── TransitionGroup ── */
+/* TransitionGroup animation - tasks slide in from the left and fade out when removed */
 .task-item-enter-active { transition: all .2s ease; }
 .task-item-leave-active { transition: all .18s ease; position: absolute; width: 100%; }
 .task-item-enter-from, .task-item-leave-to { opacity: 0; transform: translateX(-8px); }

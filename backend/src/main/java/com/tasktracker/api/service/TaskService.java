@@ -16,6 +16,7 @@ import java.util.List;
 @Transactional
 public class TaskService {
 
+    // we need both repositories because tasks can be linked to categories
     private final TaskRepository taskRepository;
     private final CategoryRepository categoryRepository;
 
@@ -26,6 +27,7 @@ public class TaskService {
 
     @Transactional(readOnly = true)
     public List<Task> findAll() {
+        // use the custom query that JOIN FETCHes the category to avoid N+1 queries
         return taskRepository.findAllWithCategory();
     }
 
@@ -38,12 +40,12 @@ public class TaskService {
 
     public Task create(TaskRequest request) {
         Task task = new Task();
-        applyRequest(task, request);
+        applyRequest(task, request);  // fill in the fields from the request DTO
         return taskRepository.save(task);
     }
 
     public Task update(Long id, TaskRequest request) {
-        Task task = findById(id);
+        Task task = findById(id);  // throws 404 if the task doesn't exist
         applyRequest(task, request);
         return taskRepository.save(task);
     }
@@ -55,11 +57,14 @@ public class TaskService {
         taskRepository.delete(task);
     }
 
+    // shared helper used by both create and update to avoid duplicate code
     private void applyRequest(Task task, TaskRequest request) {
         task.setTitle(request.getTitle());
         task.setDescription(request.getDescription());
         task.setCompleted(request.isCompleted());
 
+        // if a categoryId was provided, look up the category and assign it
+        // if not, set category to null (task has no category)
         if (request.getCategoryId() != null) {
             Category category = categoryRepository.findById(request.getCategoryId())
                     .orElseThrow(() -> new ResponseStatusException(

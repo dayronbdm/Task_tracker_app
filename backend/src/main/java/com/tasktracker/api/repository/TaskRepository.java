@@ -12,12 +12,15 @@ import java.util.Optional;
 @Repository
 public interface TaskRepository extends JpaRepository<Task, Long> {
 
-    // Eagerly join category so each GET /api/tasks doesn't fire N+1 queries
+    // JOIN FETCH the category in the same query to avoid the N+1 problem
+    // (without this, loading 10 tasks would fire 10 extra queries to get each category)
     @Query("SELECT t FROM Task t LEFT JOIN FETCH t.category")
     List<Task> findAllWithCategory();
 
+    // same idea but for a single task
     @Query("SELECT t FROM Task t LEFT JOIN FETCH t.category WHERE t.id = :id")
     Optional<Task> findByIdWithCategory(@Param("id") Long id);
 
+    // Spring Data generates the SQL for this automatically from the method name
     List<Task> findByCategoryId(Long categoryId);
 }
